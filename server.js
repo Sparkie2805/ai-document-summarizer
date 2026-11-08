@@ -61,15 +61,10 @@ ${text.slice(0, 30000)}
 
   // Candidate models to try across API versions
   const candidateConfigs = [
+    { version: 'v1beta', model: 'gemini-3.8-flash' },
+    { version: 'v1beta', model: 'gemini-2.5-flash' },
     { version: 'v1beta', model: 'gemini-2.0-flash' },
-    { version: 'v1beta', model: 'gemini-1.5-flash-latest' },
-    { version: 'v1beta', model: 'gemini-1.5-flash-002' },
-    { version: 'v1beta', model: 'gemini-1.5-flash-001' },
-    { version: 'v1beta', model: 'gemini-1.5-flash' },
-    { version: 'v1', model: 'gemini-1.5-flash' },
-    { version: 'v1', model: 'gemini-2.0-flash' },
-    { version: 'v1beta', model: 'gemini-1.5-pro' },
-    { version: 'v1beta', model: 'gemini-pro' }
+    { version: 'v1beta', model: 'gemini-1.5-flash' }
   ];
 
   let lastError = null;
@@ -122,11 +117,16 @@ ${text.slice(0, 30000)}
       });
 
       const data = await response.json();
-      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
+      if (!response.ok) {
+        console.error('[Gemini] Discovered model returned error:', data);
+        throw new Error(data.error?.message || `API error ${response.status}`);
       }
+
+      const summary = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (summary) return summary;
     }
   } catch (discoErr) {
+    lastError = discoErr;
     console.warn('[Gemini] Dynamic discovery failed:', discoErr.message);
   }
 
