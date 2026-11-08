@@ -217,7 +217,10 @@ app.post('/api/summarize', upload.single('file'), async (req, res) => {
     }
 
     if (!textToSummarize || textToSummarize.trim().length === 0) {
-      return res.status(400).json({ error: 'ไม่พบเนื้อหาข้อความหรือไฟล์ไม่มีข้อความที่สามารถอ่านได้' });
+      const msg = req.file && req.file.mimetype === 'application/pdf'
+        ? 'ไม่พบข้อความที่สามารถอ่านได้ในไฟล์ PDF (อาจเป็นไฟล์ภาพสแกนล้วน หรือมีรหัสผ่านป้องกัน แนะนำให้คัดลอกข้อความมาวางในแท็บ "วางข้อความ" แทน)'
+        : 'ไม่พบเนื้อหาข้อความ กรุณาพิมพ์หรือวางข้อความที่ต้องการสรุป';
+      return res.status(400).json({ error: msg });
     }
 
     const trimmedText = textToSummarize.trim();

@@ -36,6 +36,7 @@ const reductionBadge = document.getElementById('reductionBadge');
 const copyBtn = document.getElementById('copyBtn');
 const copyBtnText = document.getElementById('copyBtnText');
 const downloadMdBtn = document.getElementById('downloadMdBtn');
+const newSummaryBtn = document.getElementById('newSummaryBtn');
 
 // State
 let activeTab = 'pdf'; // 'pdf' | 'text'
@@ -294,3 +295,23 @@ function clearError() {
   errorAlert.classList.add('hidden');
   errorMessage.textContent = '';
 }
+
+// Reset / New Summary Button
+if (newSummaryBtn) {
+  newSummaryBtn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (activeTab === 'text') {
+      textInput.focus();
+    }
+  });
+}
+
+// Keyboard Shortcut: Ctrl+Enter or Cmd+Enter to summarize
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    if (!summarizeBtn.disabled) {
+      summarizeBtn.click();
+    }
+  }
+});
