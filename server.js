@@ -59,12 +59,24 @@ ${text.slice(0, 30000)}
 ให้ผลลัพธ์ในรูปแบบ Markdown สวยงาม มีหัวข้อและสัญลักษณ์ bullet points ที่อ่านสบายตา
 `;
 
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  // Candidate models to try across API versions
+  const candidateConfigs = [
+    { version: 'v1beta', model: 'gemini-2.0-flash' },
+    { version: 'v1beta', model: 'gemini-1.5-flash-latest' },
+    { version: 'v1beta', model: 'gemini-1.5-flash-002' },
+    { version: 'v1beta', model: 'gemini-1.5-flash-001' },
+    { version: 'v1beta', model: 'gemini-1.5-flash' },
+    { version: 'v1', model: 'gemini-1.5-flash' },
+    { version: 'v1', model: 'gemini-2.0-flash' },
+    { version: 'v1beta', model: 'gemini-1.5-pro' },
+    { version: 'v1beta', model: 'gemini-pro' }
+  ];
+
   let lastError = null;
 
-  for (const model of models) {
+  for (const config of candidateConfigs) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${effectiveKey}`;
+      const url = `https://generativelanguage.googleapis.com/${config.version}/models/${config.model}:generateContent?key=${effectiveKey}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,11 +98,63 @@ ${text.slice(0, 30000)}
       if (summary) return summary;
     } catch (err) {
       lastError = err;
-      console.warn(`Model ${model} failed, trying next fallback...`, err.message);
+      console.warn(`[Gemini] ${config.version}/${config.model} failed:`, err.message);
     }
   }
 
-  throw new Error(`ไม่สามารถเชื่อมต่อ Gemini API ได้: ${lastError?.message || 'Unknown error'}`);
+  // If candidate models all failed, dynamically query ListModels to find authorized models
+  console.log('[Gemini] Attempting dynamic model discovery via ListModels...');
+  try {
+    const discovered = await discoverAvailableModel(effectiveKey);
+    if (discovered) {
+      console.log(`[Gemini] Discovered working model: ${discovered.version}/${discovered.model}`);
+      const url = `https://generativelanguage.googleapis.com/${discovered.version}/models/${discovered.model}:generateContent?key=${effectiveKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2048,
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        return data.candidates[0].content.parts[0].text;
+      }
+    }
+  } catch (discoErr) {
+    console.warn('[Gemini] Dynamic discovery failed:', discoErr.message);
+  }
+
+  throw new Error(`ไม่สามารถเชื่อมต่อ Gemini API ได้: ${lastError?.message || 'โมเดลไม่พร้อมใช้งาน'}\n(คำแนะนำ: โปรดตรวจสอบว่า API Key ได้เปิดใช้งานจาก Google AI Studio และมีสิทธิ์เรียกใช้งานโมเดล Gemini)`);
+}
+
+async function discoverAvailableModel(apiKey) {
+  for (const version of ['v1beta', 'v1']) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const models = (data.models || []).filter(m =>
+        m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent')
+      );
+      if (models.length > 0) {
+        const preferred =
+          models.find(m => m.name.includes('flash')) ||
+          models.find(m => m.name.includes('gemini')) ||
+          models[0];
+        const cleanName = preferred.name.replace(/^models\//, '');
+        return { version, model: cleanName };
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return null;
 }
 
 function getStyleInstruction(style) {
